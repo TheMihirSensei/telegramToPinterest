@@ -1,90 +1,66 @@
-const { TelegramClient, tl, Api } = require('telegram')
-const { StringSession } = require('telegram/sessions')
-const fs = require("fs/promises")
-const input = require('input') // npm i input
-require("dotenv").config()
+const { TelegramClient, tl, Api } = require("telegram");
+const { StringSession } = require("telegram/sessions");
+const fs = require("fs/promises");
+const input = require("input");
+const express = require("express");
+const cors = require("cors");
+require("dotenv").config();
 
-const apiId = 11755904
-const apiHash = 'e1052317070b9bc4a568b491ba71a58e'
-const stringSession = new StringSession(process.env.TELEGRAM_TOKEN); // fill this later with the value from session.save()
-(async () => {
-    console.log('Loading interactive example...')
-    const client = new TelegramClient(stringSession, apiId, apiHash, { connectionRetries: 5 })
+// --- express setup --- //
+const app = express();
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+app.use(cors());
 
-    // console.log('You should now be connected.')
-    // console.log(client.session.save()) // Save this string to avoid logging in again
+async function connectToTelegram() {
+  const apiId = process.env.API_ID;
+  const apiHash = process.env.API_HASH;
+  const stringSession = new StringSession("");
+  const client = new TelegramClient(stringSession, +apiId, apiHash, {
+    connectionRetries: 5,
+  });
+  await client.start({
+    phoneNumber: async () => await input.text("Please enter your number: "),
+    password: async () => await input.text("Please enter your password: "),
+    phoneCode: async () =>
+      await input.text("Please enter the code you received: "),
+    onError: (err) => console.log(err),
+  });
+  return client.session.save();
+}
 
-    await client.connect(); // This assumes you have already authenticated with .start()
-    // await client.sendMessage('me', { message: 'HOW ARE U MIHIR?!' });
+async function telegramSetup() {
+  try {
+    console.log(" --- Main Function --- \n");
+    let telegramSessionToken = process.env.TELEGRAM_SESSION_TOKEN;
+    if (!telegramSessionToken) {
+      let telegramSessionToken = await connectToTelegram();
+      await fs.appendFile(
+        ".env",
+        `\nTELEGRAM_SESSION_TOKEN=${telegramSessionToken}`
+      );
+    }
+    const stringSession = new StringSession(telegramSessionToken);
+    const apiId = Number(process.env.API_ID);
+    const apiHash = process.env.API_HASH;
 
-    // const result = await client.invoke(
-    //     new Api.channels.GetFullChannel({
-    //       channel: "AnimeKaizoku",
-    //     })
-    //   );
-
-
-    const channel = await client.invoke(
-        new Api.channels.GetFullChannel({
-            channel: "AnimeLibrary_Wallpapers",
-        })
-    );
-
-    //   const mapped = result.map()
-    //   const jsonObj = JSON.parse(result)
-
-    // await fs.writeFile("allChat.json", jsonObj, (err) => {console.log("error is;", err)})
-    // let chatId = channel.chats[0].id
-    console.log("channel......", channel.fullChat.id)
-    console.log("channel....more info....", channel.chats[0].id.value)
-
-
-    const allChat = await client.invoke(
-        new Api.messages.GetAllChats({
-            exceptIds: [43],
-        })
-    );
-
-    fs.writeFile("chat.json", new Buffer.from(JSON.stringify(allChat)), (err) => {
-        if (err) {
-            console.log("error.....", err)
-            return
-        }
-        console.log("done")
-    })
-
-    const chat = await client.invoke(
-        new Api.messages.GetChats({
-            id: ["-1310421686"]
-        })
-    )
-
-
-    const animeWallpaper = await client.invoke(
-        new Api.messages.GetHistory({
-            peer: "-1375781470",
-            // offsetId: 1,
-            // offsetDate: 43,
-            addOffset: 0,
-            limit: 10000,
-            maxId: 0,
-            minId: 0,
-            hash: 0,
-        })
-    );
-
-    console.log("animeWallper",animeWallpaper)
-
-    fs.writeFile("animeWallpaper.json", new Buffer.from(JSON.stringify(animeWallpaper)), (err) => {
-        if (err) {
-            console.log("error.....", err)
-            return
-        }
-        console.log("done")
-    })
-
-
-    // console.log("chat ...........is..........", chat)
-
-})()
-
+    if (!apiId || !apiHash) throw Error("Please Provide API_ID and API_HASH");
+    const client = new TelegramClient(stringSession, apiId, apiHash, {
+      connectionRetries: 5,
+    });
+    await client.connect();
+    return true;
+  } catch (err) {
+    console.log("--- Telegram SetUp Error ---\n");
+    console.log(err);
+  }
+}
+const port = process.env.PORT || 5000;
+app.listen(port, async () => {
+  console.log("Express Server Started At: " + port);
+  let done = await telegramSetup();
+  done ? console.log("telegram conection done") : console.log("failed");
+});
+app.get("/", (req, res) => {
+  res.status(200).json({ message: "Telegram Pinteret Initial Route" });
+});
