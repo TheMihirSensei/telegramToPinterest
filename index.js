@@ -4,6 +4,7 @@ const fs = require("fs/promises");
 const input = require("input");
 const express = require("express");
 const cors = require("cors");
+const router = require("./routes");
 require("dotenv").config();
 
 // --- express setup --- //
@@ -61,6 +62,9 @@ app.listen(port, async () => {
   let done = await telegramSetup();
   done ? console.log("telegram conection done") : console.log("failed");
 });
+
 app.get("/", (req, res) => {
   res.status(200).json({ message: "Telegram Pinteret Initial Route" });
 });
+
+app.use("/api", router);
